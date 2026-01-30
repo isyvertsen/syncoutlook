@@ -1,0 +1,19 @@
+services:
+  calendar-sync:
+    build: .
+    container_name: outlook-google-sync
+    restart: unless-stopped
+    environment:
+      - OUTLOOK_ICS_URL=${OUTLOOK_ICS_URL}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
+      - NEAR_AI_API_KEY=${NEAR_AI_API_KEY}
+      - NEAR_AI_MODEL=${NEAR_AI_MODEL:-openai/gpt-oss-120b}
+      - FILTER_MODE=${FILTER_MODE:-non_recurring}
+      - SYNC_DAYS_AHEAD=${SYNC_DAYS_AHEAD:-30}
+      - SYNC_DAYS_BACK=${SYNC_DAYS_BACK:-7}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-15}
+      - REMINDER_MINUTES=${REMINDER_MINUTES:-10}
+    volumes:
+      - ./google_token.json:/app/google_token.json
+      - ./ai_decisions_cache.json:/app/ai_decisions_cache.json
+      - ./sync.log:/var/log/sync.log

@@ -1,0 +1,25 @@
+# Environment and secrets
+.env
+credentials.json
+client_secret_*.json
+google_token.json
+
+# Cache files
+ai_decisions_cache.json
+msal_token_cache.json
+
+# Logs
+*.log
+sync.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
