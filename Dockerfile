@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install cron and curl
-RUN apt-get update && apt-get install -y cron curl && rm -rf /var/lib/apt/lists/*
+# Install curl
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -20,8 +20,5 @@ COPY credentials.json ./
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
-
-# Create log file
-RUN touch /var/log/sync.log
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
