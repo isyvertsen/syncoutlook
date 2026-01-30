@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python312", "curl", "cron"]
+nixPkgs = ["python312", "curl", "cronie"]
 
 [phases.install]
 cmds = [
