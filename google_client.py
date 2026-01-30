@@ -184,6 +184,10 @@ class GoogleCalendarClient:
             },
         }
 
+        # Add location if present
+        if outlook_event.get("location"):
+            event["location"] = outlook_event["location"]
+
         # Handle all-day vs timed events
         if outlook_event.get("is_all_day"):
             # All-day events use date instead of dateTime

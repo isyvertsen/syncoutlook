@@ -126,6 +126,10 @@ class OutlookClient:
                 else:
                     organizer_name = organizer_email.split("@")[0]
 
+            # Get location
+            location = component.get("location")
+            location_str = str(location) if location else ""
+
             # Get description/body
             description = component.get("description")
             body = str(description)[:1000] if description else ""
@@ -165,6 +169,7 @@ class OutlookClient:
                 "start": start_str,
                 "end": end_str,
                 "timezone": "Europe/Oslo",
+                "location": location_str,
                 "organizer": organizer_name,
                 "organizer_email": organizer_email,
                 "body": body,
