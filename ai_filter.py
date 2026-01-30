@@ -156,17 +156,14 @@ class AIFilter:
         return results
 
     def _filter_non_recurring(self, event: dict) -> tuple[bool, str]:
-        """Simple filter: sync all non-recurring, single-day events."""
-        if event.get("is_recurring", False):
-            return False, "Gjentakende møte"
-
+        """Simple filter: sync all single-day events (including recurring)."""
         # Check if multi-day event
         start = event.get("start", "")[:10]  # Get date part YYYY-MM-DD
         end = event.get("end", "")[:10]
         if start and end and start != end:
             return False, "Flerdagers hendelse"
 
-        return True, "Ikke-gjentakende møte"
+        return True, "Synkroniseres"
 
     def clear_cache(self):
         """Clear the AI decision cache."""
