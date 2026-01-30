@@ -5,7 +5,7 @@ nixPkgs = ["python312", "curl", "cron"]
 cmds = [
     "curl -LsSf https://astral.sh/uv/install.sh | sh",
     "/root/.local/bin/uv venv /opt/venv",
-    "/opt/venv/bin/pip install -r requirements.txt"
+    "/root/.local/bin/uv pip install --python /opt/venv/bin/python -r requirements.txt"
 ]
 
 [start]
