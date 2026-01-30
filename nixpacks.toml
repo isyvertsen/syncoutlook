@@ -1,12 +1,12 @@
 [phases.setup]
-nixPkgs = ["python312", "curl"]
+nixPkgs = ["python312", "curl", "cron"]
 
 [phases.install]
 cmds = [
     "curl -LsSf https://astral.sh/uv/install.sh | sh",
-    "export PATH=\"/root/.local/bin:$PATH\"",
-    "uv pip install --system -r requirements.txt"
+    "/root/.local/bin/uv venv /opt/venv",
+    "/opt/venv/bin/pip install -r requirements.txt"
 ]
 
 [start]
-cmd = "/docker-entrypoint.sh"
+cmd = "bash -c 'chmod +x /app/docker-entrypoint.sh && /app/docker-entrypoint.sh'"
