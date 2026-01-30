@@ -6,6 +6,8 @@ import logging
 import sys
 from datetime import datetime
 
+import holidays
+
 import config
 from ai_filter import AIFilter
 from google_client import GoogleCalendarClient
@@ -21,6 +23,30 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+
+
+def is_working_hours() -> bool:
+    """Check if current time is within working hours (weekdays 07:00-15:00, not holidays)."""
+    now = datetime.now()
+
+    # Check if it's a weekend (Saturday=5, Sunday=6)
+    if now.weekday() >= 5:
+        logger.info("Skipping sync: Weekend")
+        return False
+
+    # Check if it's a Norwegian public holiday
+    no_holidays = holidays.Norway()
+    if now.date() in no_holidays:
+        holiday_name = no_holidays.get(now.date())
+        logger.info(f"Skipping sync: Public holiday ({holiday_name})")
+        return False
+
+    # Check if it's within working hours (07:00-15:00)
+    if now.hour < 7 or now.hour >= 15:
+        logger.info(f"Skipping sync: Outside working hours (current: {now.hour}:00)")
+        return False
+
+    return True
 
 
 class CalendarSync:
@@ -263,11 +289,20 @@ def main():
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force sync regardless of working hours",
+    )
 
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Check if we should run (working hours only, unless forced)
+    if not args.force and not is_working_hours():
+        sys.exit(0)
 
     # Validate configuration
     missing = []

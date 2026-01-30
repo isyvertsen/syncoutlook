@@ -2,12 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install cron
-RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+# Install cron and curl
+RUN apt-get update && apt-get install -y cron curl && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy requirements and install dependencies with uv
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system -r requirements.txt
 
 # Copy application files
 COPY *.py ./
