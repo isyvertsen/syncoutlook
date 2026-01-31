@@ -1,160 +1,282 @@
-# Outlook → Google Calendar Sync med AI-filtrering
+# Outlook → Google Calendar Sync
 
-Synkroniserer Outlook-kalender (Microsoft 365) til Google Calendar, med NEAR AI for å filtrere hvilke avtaler som skal inkluderes.
+One-way calendar sync from Microsoft Outlook to Google Calendar with AI-powered event filtering.
 
-## Funksjoner
+## Features
 
-- Henter kalenderhendelser fra Outlook via publisert ICS-feed (ingen app-registrering nødvendig!)
-- Bruker NEAR AI til å bestemme hvilke hendelser som skal synkroniseres
-- Synkroniserer godkjente hendelser til Google Calendar
-- Håndterer oppdateringer og slettinger automatisk
-- Cacher AI-beslutninger for å spare API-kall
-- Støtter dry-run modus for testing
+- **One-way sync** from Outlook (via published ICS feed) to Google Calendar
+- **AI-powered filtering** to decide which events to sync (supports OpenAI, Azure OpenAI, NEAR AI)
+- **Smart deduplication** using event IDs to avoid duplicates
+- **Caching** of AI decisions to reduce API costs
+- **Docker deployment** for easy self-hosting
+- **Scheduler** for automatic hourly sync
 
-## Oppsett
+## Quick Start with Docker
 
-### 1. Installer avhengigheter
+### 1. Prerequisites
 
-```bash
-pip install -r requirements.txt
-```
+- Docker and Docker Compose installed
+- Outlook calendar published as ICS feed
+- Google Cloud project with Calendar API enabled
+- API key for your chosen AI provider (OpenAI, Azure, or NEAR AI)
 
-### 2. Publiser Outlook-kalender som ICS
-
-1. Gå til [outlook.office.com](https://outlook.office.com)
-2. Klikk på kalender-ikonet (📅)
-3. Klikk på tannhjulet (⚙️) → **View all Outlook settings**
-4. Gå til **Calendar** → **Shared calendars**
-5. Under **Publish a calendar**, velg din kalender
-6. Velg **"Can view all details"**
-7. Klikk **Publish**
-8. Kopier **ICS**-lenken
-
-### 3. Konfigurer Google Calendar API
-
-1. Gå til [Google Cloud Console](https://console.cloud.google.com)
-2. Opprett et nytt prosjekt (eller velg et eksisterende)
-3. Gå til "APIs & Services" → "Library"
-4. Søk etter "Google Calendar API" og aktiver den
-5. Gå til "APIs & Services" → "Credentials"
-6. Klikk "Create Credentials" → "OAuth client ID"
-7. Velg "Desktop app" som applikasjonstype
-8. Last ned JSON-filen og lagre den som `credentials.json` i prosjektmappen
-
-### 4. Få NEAR AI API-nøkkel
-
-1. Gå til [NEAR AI](https://app.near.ai)
-2. Opprett en API-nøkkel
-
-### 5. Konfigurer miljøvariabler
-
-Kopier `.env.example` til `.env` og fyll inn verdiene:
+### 2. Setup
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd syncoutlook
+
+# Copy environment template
 cp .env.example .env
+
+# Edit .env with your configuration (see Configuration section below)
 ```
 
-Rediger `.env`:
+### 3. Google Calendar Authentication
 
+Before running Docker, you need to authenticate with Google Calendar locally:
+
+```bash
+# Install dependencies
+uv pip install -r requirements.txt
+
+# Run once to complete OAuth flow (opens browser)
+python google_client.py
+
+# This creates google_token.json which Docker will use
 ```
-OUTLOOK_ICS_URL=https://outlook.office365.com/owa/calendar/.../calendar.ics
-NEAR_AI_API_KEY=din-near-ai-api-nøkkel
+
+### 4. Run with Docker
+
+```bash
+# Build and start the container
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+## Configuration
+
+All configuration is done via environment variables in `.env`:
+
+### Required Settings
+
+| Variable | Description |
+|----------|-------------|
+| `OUTLOOK_ICS_URL` | Your published Outlook calendar ICS URL |
+| `GOOGLE_CALENDAR_ID` | Target Google Calendar ID (use `primary` for main calendar) |
+
+### AI Provider Settings
+
+Choose one of three AI providers by setting `AI_PROVIDER`:
+
+#### Option 1: OpenAI (Recommended)
+
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-your-api-key
+OPENAI_MODEL=gpt-4o-mini
+```
+
+#### Option 2: Azure OpenAI
+
+```env
+AI_PROVIDER=azure
+AZURE_OPENAI_API_KEY=your-azure-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# Optional: Use Azure AD / Entra ID instead of API key
+# AZURE_TENANT_ID=your-tenant-id
+# AZURE_CLIENT_ID=your-client-id
+# AZURE_CLIENT_SECRET=your-client-secret
+```
+
+#### Option 3: NEAR AI
+
+```env
+AI_PROVIDER=near_ai
+NEAR_AI_API_KEY=your-near-ai-api-key
 NEAR_AI_MODEL=openai/gpt-oss-120b
-GOOGLE_CALENDAR_ID=primary
-SYNC_DAYS_AHEAD=30
-SYNC_DAYS_BACK=7
 ```
 
-## Bruk
+### Filter Mode
 
-### Test uten å gjøre endringer (dry-run)
-
-```bash
-python sync_calendar.py --dry-run
+```env
+# "ai" = Use AI to decide which events to sync
+# "non_recurring" = Simple rule: sync all single-day events
+FILTER_MODE=non_recurring
 ```
 
-### Kjør full synkronisering
+### Sync Settings
 
-```bash
-python sync_calendar.py
+```env
+SYNC_DAYS_AHEAD=30        # Days ahead to sync
+SYNC_DAYS_BACK=7          # Days back to sync
+REMINDER_MINUTES=10       # Reminder before events (0 to disable)
+SYNC_INTERVAL=15          # Minutes between syncs (scheduler)
+DRY_RUN=false             # Set to true for testing
 ```
 
-### Med verbose logging
+## AI Filter Prompt
 
-```bash
-python sync_calendar.py --verbose
-```
-
-### Tøm AI-cache
-
-```bash
-python sync_calendar.py --clear-cache
-```
-
-## Tilpass AI-filtrering
-
-Rediger `AI_FILTER_PROMPT` i `config.py` for å tilpasse reglene for hvilke hendelser som skal synkroniseres.
-
-Eksempel på tilpasning:
+The AI prompt that determines which events get synced is defined in `config.py`. You can customize the rules to match your preferences:
 
 ```python
-AI_FILTER_PROMPT = """
-...
-REGLER FOR SYNKRONISERING:
-1. Synkroniser alle møter med eksterne deltakere
-2. Synkroniser ferie og fridager
-3. IKKE synkroniser daglige stand-ups
-4. IKKE synkroniser interne planleggingsmøter
-...
+AI_FILTER_PROMPT = """You are a calendar assistant. Based on the following calendar event,
+determine whether it should be synced to my personal Google Calendar.
+
+Event details:
+- Title: {title}
+- Time: {start} - {end}
+- Organizer: {organizer}
+- Description: {body}
+- Categories: {categories}
+- Is all-day event: {is_all_day}
+- Status: {status}
+
+SYNC RULES:
+1. SYNC important external meetings with customers or partners
+2. SYNC conferences, seminars, and important events
+3. SYNC personal appointments and vacation/time-off
+4. DO NOT SYNC internal team meetings or stand-ups
+5. DO NOT SYNC routine status meetings
+6. DO NOT SYNC "focus time" or blocked time slots
+7. When in doubt, prefer to sync rather than skip
+
+Respond ONLY with valid JSON in this format:
+{"sync": true, "reason": "brief explanation"}
+or
+{"sync": false, "reason": "brief explanation"}
 """
 ```
 
-## Automatisk kjøring (Windows Task Scheduler)
+### Customizing the Prompt
 
-1. Åpne Task Scheduler
-2. Klikk "Create Basic Task"
-3. Gi den et navn (f.eks. "Calendar Sync")
-4. Velg trigger (f.eks. "Daily" eller "When I log on")
-5. Velg "Start a program"
-6. Program: `python` (eller full path til python.exe)
-7. Arguments: `C:\path\to\sync_calendar.py`
-8. Start in: `C:\path\to\syncoutlook`
+Edit `config.py` and modify the `AI_FILTER_PROMPT` variable. The available placeholders are:
 
-## Filer
+| Placeholder | Description |
+|-------------|-------------|
+| `{title}` | Event title |
+| `{start}` | Start time (ISO format) |
+| `{end}` | End time (ISO format) |
+| `{organizer}` | Event organizer |
+| `{body}` | Event description (truncated to 1000 chars) |
+| `{categories}` | Event categories |
+| `{is_all_day}` | "Yes" or "No" |
+| `{status}` | Event status (busy, free, tentative, etc.) |
 
-| Fil | Beskrivelse |
-|-----|-------------|
-| `sync_calendar.py` | Hovedskript for synkronisering |
-| `outlook_client.py` | Outlook ICS-feed klient |
-| `google_client.py` | Google Calendar API-klient |
-| `ai_filter.py` | Claude AI-filtrering |
-| `config.py` | Konfigurasjon og innstillinger |
-| `requirements.txt` | Python-avhengigheter |
+## Manual Usage
 
-## Genererte filer (ignoreres i git)
+### Run Sync Manually
 
-- `google_token.json` - Google token cache
-- `ai_decisions_cache.json` - AI-beslutninger cache
-- `sync.log` - Loggfil
-- `.env` - Miljøvariabler
-- `credentials.json` - Google credentials
+```bash
+# Dry run (preview changes without applying)
+python sync_calendar.py --dry-run
 
-## Feilsøking
+# Full sync
+python sync_calendar.py
 
-### "OUTLOOK_ICS_URL not configured"
-- Sjekk at du har lagt ICS-URLen i `.env`-filen
+# Verbose logging
+python sync_calendar.py --verbose
 
-### "ICS feed returned status 404"
-- Kalenderen er kanskje ikke lenger publisert
-- Gå til Outlook-innstillinger og publiser på nytt
+# Clear AI decision cache
+python sync_calendar.py --clear-cache
 
-### "Google credentials file not found"
-- Last ned `credentials.json` fra Google Cloud Console
-- Plasser filen i prosjektmappen
+# Force sync (ignore last sync time)
+python sync_calendar.py --force
+```
 
-### "NEAR AI API error"
-- Sjekk at `NEAR_AI_API_KEY` er gyldig
-- Sjekk at du har tilgjengelig kvote
+### Test Components
 
-### Token-problemer med Google
-- Slett `google_token.json` for å tvinge ny autentisering
+```bash
+# Test Outlook ICS feed
+python outlook_client.py
+
+# Test Google Calendar connection
+python google_client.py
+
+# Test AI filtering
+python ai_filter.py
+```
+
+## Getting Outlook ICS URL
+
+1. Go to [Outlook Web](https://outlook.office365.com)
+2. Click **Settings** (gear icon) → **View all Outlook settings**
+3. Go to **Calendar** → **Shared calendars**
+4. Under "Publish a calendar", select your calendar
+5. Choose "Can view all details" for permissions
+6. Click **Publish** and copy the ICS link
+
+## Setting Up Google Calendar API
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project (or select existing)
+3. Enable the **Google Calendar API**
+4. Go to **Credentials** → **Create Credentials** → **OAuth client ID**
+5. Choose "Desktop app" as application type
+6. Download the credentials and save as `credentials.json` in project root
+
+## Architecture
+
+```
+sync_calendar.py      Main orchestrator
+    ├── outlook_client.py   Fetches events from Outlook ICS feed
+    ├── google_client.py    CRUD operations on Google Calendar
+    ├── ai_filter.py        AI filtering (OpenAI/Azure/NEAR AI)
+    └── config.py           All settings and AI prompt
+
+scheduler.py          Hourly sync scheduler for Docker
+
+Data flow:
+Outlook ICS → Parse events → AI filter (cached) → Google Calendar API
+```
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `credentials.json` | Google OAuth credentials (from Cloud Console) |
+| `google_token.json` | Google OAuth token (auto-generated) |
+| `ai_decisions_cache.json` | Cached AI decisions (auto-generated) |
+| `.env` | Environment configuration |
+| `sync.log` | Sync log file |
+
+## Troubleshooting
+
+### "No events found in Outlook calendar"
+
+- Verify the ICS URL is correct and accessible
+- Check if the calendar is published with correct permissions
+- Some corporate calendars block external access
+
+### "Google Calendar API error"
+
+- Ensure `credentials.json` exists in project root
+- Delete `google_token.json` and re-authenticate
+- Verify Calendar API is enabled in Google Cloud Console
+
+### "AI API error"
+
+- Check your API key is valid
+- Verify the correct provider is set in `AI_PROVIDER`
+- For Azure: check endpoint URL and deployment name
+- Try running with `--verbose` for detailed error messages
+
+### Events not syncing as expected
+
+- Check `FILTER_MODE` setting
+- Clear AI cache: `python sync_calendar.py --clear-cache`
+- Review the AI prompt in `config.py`
+- Enable verbose logging to see AI decisions
+
+## License
+
+MIT

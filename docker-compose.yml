@@ -4,10 +4,28 @@ services:
     container_name: outlook-google-sync
     restart: unless-stopped
     environment:
+      # Outlook
       - OUTLOOK_ICS_URL=${OUTLOOK_ICS_URL}
-      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
-      - NEAR_AI_API_KEY=${NEAR_AI_API_KEY}
+      # Google
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-primary}
+      # AI Provider (openai, azure, or near_ai)
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_API_URL=${OPENAI_API_URL:-}
+      # Azure OpenAI
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
+      # NEAR AI (legacy)
+      - NEAR_AI_API_KEY=${NEAR_AI_API_KEY:-}
       - NEAR_AI_MODEL=${NEAR_AI_MODEL:-openai/gpt-oss-120b}
+      # Sync settings
       - FILTER_MODE=${FILTER_MODE:-non_recurring}
       - SYNC_DAYS_AHEAD=${SYNC_DAYS_AHEAD:-30}
       - SYNC_DAYS_BACK=${SYNC_DAYS_BACK:-7}

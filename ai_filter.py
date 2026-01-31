@@ -1,4 +1,10 @@
-"""AI-powered event filtering using NEAR AI API."""
+"""AI-powered event filtering using OpenAI-compatible APIs.
+
+Supports multiple providers:
+- OpenAI (default)
+- Azure OpenAI
+- NEAR AI
+"""
 
 import hashlib
 import json
@@ -14,13 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 class AIFilter:
-    """Filter calendar events using NEAR AI."""
+    """Filter calendar events using AI (OpenAI, Azure OpenAI, or NEAR AI)."""
 
     def __init__(self):
-        self.api_key = config.NEAR_AI_API_KEY
-        self.api_url = config.NEAR_AI_API_URL
-        self.model = config.NEAR_AI_MODEL
+        ai_config = config.get_ai_config()
+        self.provider = ai_config["provider"]
+        self.api_key = ai_config["api_key"]
+        self.api_url = ai_config["api_url"]
+        self.model = ai_config["model"]
+        self.headers = ai_config["headers"]
         self.cache = self._load_cache()
+
+        logger.info(f"AI Filter initialized with provider: {self.provider}")
 
     def _load_cache(self) -> dict:
         """Load AI decision cache from file."""
@@ -68,28 +79,31 @@ class AIFilter:
 
         # Build prompt with event details
         prompt = config.AI_FILTER_PROMPT.format(
-            title=event.get("title", "(ingen tittel)"),
+            title=event.get("title", "(no title)"),
             start=event.get("start", ""),
             end=event.get("end", ""),
-            organizer=event.get("organizer", "ukjent"),
-            body=event.get("body", "(ingen beskrivelse)")[:1000],
-            categories=", ".join(event.get("categories", [])) or "(ingen)",
-            is_all_day="Ja" if event.get("is_all_day") else "Nei",
+            organizer=event.get("organizer", "unknown"),
+            body=event.get("body", "(no description)")[:1000],
+            categories=", ".join(event.get("categories", [])) or "(none)",
+            is_all_day="Yes" if event.get("is_all_day") else "No",
             status=event.get("status", "busy"),
         )
 
         try:
+            # Build request payload (OpenAI-compatible format)
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 150,
+            }
+
+            # Azure doesn't need model in body (it's in the URL)
+            if self.provider != "azure":
+                payload["model"] = self.model
+
             response = requests.post(
                 self.api_url,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 150,
-                },
+                headers=self.headers,
+                json=payload,
                 timeout=30,
             )
             response.raise_for_status()
@@ -101,7 +115,7 @@ class AIFilter:
             # Parse JSON response
             parsed = self._parse_response(response_text)
             should_sync = parsed.get("sync", False)
-            reason = parsed.get("reason", "Ingen forklaring gitt")
+            reason = parsed.get("reason", "No explanation provided")
 
             # Cache the decision
             self.cache[event_hash] = {"sync": should_sync, "reason": reason}
@@ -111,8 +125,8 @@ class AIFilter:
             return should_sync, reason
 
         except requests.RequestException as e:
-            logger.error(f"NEAR AI API error: {e}")
-            return True, f"API-feil, synkroniserer for sikkerhets skyld: {e}"
+            logger.error(f"{self.provider} API error: {e}")
+            return True, f"API error, syncing as fallback: {e}"
 
     def _parse_response(self, response_text: str) -> dict:
         """Parse the AI response JSON."""
@@ -125,7 +139,7 @@ class AIFilter:
         except (ValueError, json.JSONDecodeError) as e:
             logger.warning(f"Failed to parse AI response: {response_text}, error: {e}")
 
-        return {"sync": True, "reason": "Kunne ikke tolke AI-svar, synkroniserer for sikkerhets skyld"}
+        return {"sync": True, "reason": "Could not parse AI response, syncing as fallback"}
 
     def filter_events(self, events: list[dict]) -> list[tuple[dict, str]]:
         """Filter a list of events, returning those that should be synced.
@@ -151,7 +165,7 @@ class AIFilter:
                 skip_count += 1
                 logger.info(f"Skipping '{event['title']}': {reason}")
 
-        mode_name = "non-recurring filter" if config.FILTER_MODE == "non_recurring" else "AI filtering"
+        mode_name = "non-recurring filter" if config.FILTER_MODE == "non_recurring" else f"AI filtering ({self.provider})"
         logger.info(f"{mode_name} complete: {sync_count} to sync, {skip_count} skipped")
         return results
 
@@ -161,9 +175,9 @@ class AIFilter:
         start = event.get("start", "")[:10]  # Get date part YYYY-MM-DD
         end = event.get("end", "")[:10]
         if start and end and start != end:
-            return False, "Flerdagers hendelse"
+            return False, "Multi-day event"
 
-        return True, "Synkroniseres"
+        return True, "Synced"
 
     def clear_cache(self):
         """Clear the AI decision cache."""
@@ -202,7 +216,7 @@ def main():
 
     ai_filter = AIFilter()
 
-    print("\nTesting AI filter:\n")
+    print(f"\nTesting AI filter (provider: {ai_filter.provider}):\n")
     for event in test_events:
         should_sync, reason = ai_filter.should_sync(event)
         status = "SYNC" if should_sync else "SKIP"
