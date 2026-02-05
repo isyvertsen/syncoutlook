@@ -7,6 +7,7 @@ from typing import Optional
 
 import requests
 from icalendar import Calendar
+from dateutil import rrule
 
 import config
 
@@ -69,9 +70,17 @@ class OutlookClient:
             if component.name != "VEVENT":
                 continue
 
-            event = self._parse_event(component)
-            if event and self._is_in_range(event, start_date, end_date):
-                events.append(event)
+            # Check if this is a recurring event
+            rrule_prop = component.get("rrule")
+            if rrule_prop:
+                # Expand recurring event into individual occurrences
+                expanded = self._expand_recurring_event(component, start_date, end_date)
+                events.extend(expanded)
+            else:
+                # Single event
+                event = self._parse_event(component)
+                if event and self._is_in_range(event, start_date, end_date):
+                    events.append(event)
 
         # Sort by start time
         events.sort(key=lambda e: e["start"])
@@ -183,6 +192,101 @@ class OutlookClient:
         except Exception as e:
             logger.warning(f"Failed to parse event: {e}")
             return None
+
+    def _expand_recurring_event(self, component, start_date: datetime, end_date: datetime) -> list[dict]:
+        """Expand a recurring event into individual occurrences within the date range."""
+        events = []
+
+        try:
+            # Get the RRULE
+            rrule_prop = component.get("rrule")
+            if not rrule_prop:
+                return events
+
+            # Get event start time
+            dtstart = component.get("dtstart")
+            if not dtstart:
+                return events
+
+            start_dt = dtstart.dt
+
+            # Handle timezone-aware vs naive datetimes
+            if hasattr(start_dt, "hour"):
+                # Timed event - make sure we have a datetime
+                if not isinstance(start_dt, datetime):
+                    return events
+            else:
+                # All-day event - convert date to datetime for rrule
+                start_dt = datetime.combine(start_dt, datetime.min.time())
+
+            # Parse RRULE
+            rrule_str = rrule_prop.to_ical().decode('utf-8')
+
+            # Calculate duration
+            dtend = component.get("dtend")
+            if dtend:
+                end_dt = dtend.dt
+                if hasattr(start_dt, "hour") and hasattr(end_dt, "hour"):
+                    duration = end_dt - start_dt
+                else:
+                    # For all-day events
+                    if not isinstance(end_dt, datetime):
+                        end_dt = datetime.combine(end_dt, datetime.min.time())
+                    duration = end_dt - start_dt
+            else:
+                duration = timedelta(hours=1)  # Default 1 hour
+
+            # Generate occurrences using dateutil.rrule
+            # We need to parse the RRULE and apply it
+            rrule_obj = rrule.rrulestr(rrule_str, dtstart=start_dt)
+
+            # Limit to date range (make dates timezone-naive for comparison)
+            occurrences = []
+            for occurrence in rrule_obj:
+                # Make timezone-naive for comparison
+                occurrence_naive = occurrence.replace(tzinfo=None) if occurrence.tzinfo else occurrence
+
+                if occurrence_naive > end_date:
+                    break
+                if occurrence_naive >= start_date:
+                    occurrences.append(occurrence)
+
+                # Safety limit: max 1000 occurrences
+                if len(occurrences) >= 1000:
+                    logger.warning(f"Limiting recurring event to 1000 occurrences")
+                    break
+
+            # Create individual event instances
+            for occurrence in occurrences:
+                event = self._parse_event(component)
+                if event:
+                    # Update start/end times for this occurrence
+                    occurrence_end = occurrence + duration
+
+                    # Determine if all-day event
+                    is_all_day = not hasattr(dtstart.dt, "hour")
+
+                    if is_all_day:
+                        event["start"] = occurrence.date().isoformat()
+                        event["end"] = occurrence_end.date().isoformat()
+                    else:
+                        event["start"] = occurrence.isoformat()
+                        event["end"] = occurrence_end.isoformat()
+
+                    # Create unique ID for this occurrence (UID + date)
+                    occurrence_date_str = occurrence.date().isoformat()
+                    unique_uid = f"{event['original_uid']}-{occurrence_date_str}"
+                    event["id"] = hashlib.sha256(unique_uid.encode()).hexdigest()[:32]
+
+                    events.append(event)
+
+            if events:
+                logger.info(f"Expanded recurring event '{events[0]['title']}' into {len(events)} occurrences")
+
+        except Exception as e:
+            logger.warning(f"Failed to expand recurring event: {e}")
+
+        return events
 
     def _is_in_range(self, event: dict, start_date: datetime, end_date: datetime) -> bool:
         """Check if event falls within the date range."""
