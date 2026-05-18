@@ -15,7 +15,6 @@ RUN uv pip install --system -r requirements.txt
 
 # Copy application files
 COPY *.py ./
-COPY credentials.json ./
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh

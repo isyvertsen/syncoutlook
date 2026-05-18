@@ -11,8 +11,13 @@ OUTLOOK_ICS_URL = os.getenv("OUTLOOK_ICS_URL")
 
 # Google Calendar settings
 GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
-GOOGLE_CREDENTIALS_FILE = "credentials.json"
-GOOGLE_TOKEN_FILE = "google_token.json"
+GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv(
+    "GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json"
+)
+# Service account key JSON passed directly via env (recommended for Coolify /
+# container deploys so no key file is ever copied into the image or repo).
+# Takes precedence over the file above.
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # =============================================================================
