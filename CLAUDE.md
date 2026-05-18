@@ -74,5 +74,5 @@ All settings in `.env` (copy from `.env.example`):
 
 ## Required Files
 
-- `service_account.json` - Google service account key (Cloud Console → Service Accounts). Share the target calendar with the service account's email ("Make changes to events").
+- `service_account.json` - Google service account key (Cloud Console → Service Accounts). Share the target calendar with the service account's email ("Make changes to events"). For Coolify/container deploys, omit this file and instead set the key JSON in the `GOOGLE_SERVICE_ACCOUNT_JSON` env var (takes precedence over the file).
 - `.env` - Environment variables

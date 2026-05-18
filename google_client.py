@@ -1,5 +1,6 @@
 """Google Calendar API client."""
 
+import json
 import logging
 import os
 from datetime import datetime
@@ -21,24 +22,32 @@ class GoogleCalendarClient:
     OUTLOOK_ID_PROPERTY = "outlookEventId"
 
     def __init__(self):
-        self.creds: Optional[Credentials] = None
+        self.creds: Optional[service_account.Credentials] = None
         self.service = None
 
     def authenticate(self) -> bool:
         """Authenticate with Google Calendar API using a service account."""
-        if not os.path.exists(config.GOOGLE_SERVICE_ACCOUNT_FILE):
-            logger.error(
-                f"Service account key not found: {config.GOOGLE_SERVICE_ACCOUNT_FILE}\n"
-                "Create a service account in Google Cloud Console, download its "
-                "JSON key, save it to this path, and share the target calendar "
-                "with the service account's email ('Make changes to events')."
-            )
-            return False
-
         try:
-            self.creds = service_account.Credentials.from_service_account_file(
-                config.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=config.GOOGLE_SCOPES
-            )
+            if config.GOOGLE_SERVICE_ACCOUNT_JSON:
+                info = json.loads(config.GOOGLE_SERVICE_ACCOUNT_JSON)
+                self.creds = service_account.Credentials.from_service_account_info(
+                    info, scopes=config.GOOGLE_SCOPES
+                )
+            elif os.path.exists(config.GOOGLE_SERVICE_ACCOUNT_FILE):
+                self.creds = service_account.Credentials.from_service_account_file(
+                    config.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=config.GOOGLE_SCOPES
+                )
+            else:
+                logger.error(
+                    "No Google service account credentials found. Set the "
+                    "GOOGLE_SERVICE_ACCOUNT_JSON env var to the key JSON "
+                    f"(recommended for Coolify), or place the key file at "
+                    f"{config.GOOGLE_SERVICE_ACCOUNT_FILE}. Then share the "
+                    "target calendar with the service account's email "
+                    "('Make changes to events')."
+                )
+                return False
+
             self.service = build("calendar", "v3", credentials=self.creds)
             logger.info("Successfully connected to Google Calendar API")
             return True
