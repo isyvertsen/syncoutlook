@@ -27,9 +27,19 @@ class GoogleCalendarClient:
 
     def authenticate(self) -> bool:
         """Authenticate with Google Calendar API using a service account."""
+        info = None
+        raw = (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip()
+        if raw:
+            try:
+                info = json.loads(raw)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"GOOGLE_SERVICE_ACCOUNT_JSON is set but not valid JSON ({e}); "
+                    f"falling back to key file {config.GOOGLE_SERVICE_ACCOUNT_FILE}"
+                )
+
         try:
-            if config.GOOGLE_SERVICE_ACCOUNT_JSON:
-                info = json.loads(config.GOOGLE_SERVICE_ACCOUNT_JSON)
+            if info is not None:
                 self.creds = service_account.Credentials.from_service_account_info(
                     info, scopes=config.GOOGLE_SCOPES
                 )
