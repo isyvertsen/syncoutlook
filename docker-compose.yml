@@ -32,6 +32,6 @@ services:
       - SYNC_INTERVAL=${SYNC_INTERVAL:-15}
       - REMINDER_MINUTES=${REMINDER_MINUTES:-10}
     volumes:
-      - ./google_token.json:/app/google_token.json
+      - ./service_account.json:/app/service_account.json
       - ./ai_decisions_cache.json:/app/ai_decisions_cache.json
       - ./sync.log:/var/log/sync.log

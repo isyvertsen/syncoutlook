@@ -5,9 +5,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -27,47 +25,25 @@ class GoogleCalendarClient:
         self.service = None
 
     def authenticate(self) -> bool:
-        """Authenticate with Google Calendar API."""
-        # Load existing credentials
-        if os.path.exists(config.GOOGLE_TOKEN_FILE):
-            self.creds = Credentials.from_authorized_user_file(
-                config.GOOGLE_TOKEN_FILE, config.GOOGLE_SCOPES
+        """Authenticate with Google Calendar API using a service account."""
+        if not os.path.exists(config.GOOGLE_SERVICE_ACCOUNT_FILE):
+            logger.error(
+                f"Service account key not found: {config.GOOGLE_SERVICE_ACCOUNT_FILE}\n"
+                "Create a service account in Google Cloud Console, download its "
+                "JSON key, save it to this path, and share the target calendar "
+                "with the service account's email ('Make changes to events')."
             )
-
-        # Refresh or get new credentials if needed
-        if not self.creds or not self.creds.valid:
-            if self.creds and self.creds.expired and self.creds.refresh_token:
-                try:
-                    self.creds.refresh(Request())
-                    logger.info("Refreshed Google credentials")
-                except Exception as e:
-                    logger.warning(f"Failed to refresh token: {e}")
-                    self.creds = None
-
-            if not self.creds:
-                if not os.path.exists(config.GOOGLE_CREDENTIALS_FILE):
-                    logger.error(
-                        f"Google credentials file not found: {config.GOOGLE_CREDENTIALS_FILE}\n"
-                        "Download it from Google Cloud Console."
-                    )
-                    return False
-
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    config.GOOGLE_CREDENTIALS_FILE, config.GOOGLE_SCOPES
-                )
-                self.creds = flow.run_local_server(port=8080)
-                logger.info("Completed Google OAuth flow")
-
-            # Save credentials for next run
-            with open(config.GOOGLE_TOKEN_FILE, "w") as f:
-                f.write(self.creds.to_json())
+            return False
 
         try:
+            self.creds = service_account.Credentials.from_service_account_file(
+                config.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=config.GOOGLE_SCOPES
+            )
             self.service = build("calendar", "v3", credentials=self.creds)
             logger.info("Successfully connected to Google Calendar API")
             return True
         except Exception as e:
-            logger.error(f"Failed to build Google Calendar service: {e}")
+            logger.error(f"Failed to authenticate with service account: {e}")
             return False
 
     def get_synced_events(self) -> dict[str, dict]:

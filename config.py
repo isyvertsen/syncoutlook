@@ -11,8 +11,9 @@ OUTLOOK_ICS_URL = os.getenv("OUTLOOK_ICS_URL")
 
 # Google Calendar settings
 GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
-GOOGLE_CREDENTIALS_FILE = "credentials.json"
-GOOGLE_TOKEN_FILE = "google_token.json"
+GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv(
+    "GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json"
+)
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # =============================================================================

@@ -3,6 +3,7 @@
 credentials.json
 client_secret_*.json
 google_token.json
+service_account.json
 
 # Cache files
 ai_decisions_cache.json

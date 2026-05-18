@@ -52,8 +52,7 @@ Edit `config.py` → `AI_FILTER_PROMPT` to customize filtering rules.
 
 ## Files
 
-| Generated | Purpose |
-|-----------|---------|
-| `google_token.json` | OAuth token |
+| File | Purpose |
+|------|---------|
+| `service_account.json` | Google service account key (download from Cloud Console) |
 | `ai_decisions_cache.json` | AI cache |
-| `credentials.json` | Google OAuth (download from Cloud Console) |
