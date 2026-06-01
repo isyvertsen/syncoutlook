@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Python-based scheduler for calendar sync - replaces system cron."""
 
+import os
 import subprocess
 import sys
 import time
@@ -9,11 +10,15 @@ from datetime import datetime
 
 import schedule
 
+import health_server
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8080"))
 
 
 def run_sync():
@@ -26,8 +31,16 @@ def run_sync():
         )
         if result.returncode != 0:
             logger.warning(f"Sync exited with code {result.returncode}")
+        health_server.record_sync(
+            success=result.returncode == 0,
+            returncode=result.returncode,
+            ran_at=datetime.now().isoformat(),
+        )
     except Exception as e:
         logger.error(f"Failed to run sync: {e}")
+        health_server.record_sync(
+            success=False, returncode=-1, ran_at=datetime.now().isoformat()
+        )
 
 
 def main():
@@ -36,9 +49,17 @@ def main():
     print("Excluding Norwegian public holidays")
     print()
 
+    # Start health endpoint so orchestrators can verify liveness.
+    health_server.start_health_server(HEALTH_PORT)
+
     # Run initial sync (forced)
     print("Running initial sync...")
-    subprocess.run([sys.executable, "sync_calendar.py", "--force"])
+    initial = subprocess.run([sys.executable, "sync_calendar.py", "--force"])
+    health_server.record_sync(
+        success=initial.returncode == 0,
+        returncode=initial.returncode,
+        ran_at=datetime.now().isoformat(),
+    )
 
     # Schedule hourly runs at minute 0 for hours 7-14
     for hour in range(7, 15):

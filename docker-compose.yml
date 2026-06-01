@@ -31,6 +31,15 @@ services:
       - SYNC_DAYS_BACK=${SYNC_DAYS_BACK:-7}
       - SYNC_INTERVAL=${SYNC_INTERVAL:-15}
       - REMINDER_MINUTES=${REMINDER_MINUTES:-10}
+      - HEALTH_PORT=${HEALTH_PORT:-8080}
+    ports:
+      - "${HEALTH_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - ./service_account.json:/app/service_account.json
       - ./ai_decisions_cache.json:/app/ai_decisions_cache.json
