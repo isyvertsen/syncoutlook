@@ -20,4 +20,7 @@ COPY *.py ./
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+# Health endpoint served by the scheduler (see health_server.py)
+EXPOSE 8080
+
 ENTRYPOINT ["/docker-entrypoint.sh"]

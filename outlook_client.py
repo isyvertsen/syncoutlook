@@ -30,13 +30,19 @@ class OutlookClient:
             return False
 
         try:
-            response = requests.head(self.ics_url, timeout=10)
-            if response.status_code == 200:
-                logger.info("Successfully connected to Outlook ICS feed")
-                return True
-            else:
-                logger.error(f"ICS feed returned status {response.status_code}")
-                return False
+            # Use GET (streamed) rather than HEAD: Outlook's published ICS
+            # endpoint responds 405 Method Not Allowed to HEAD requests, which
+            # previously caused authentication to fail even for valid feeds.
+            response = requests.get(self.ics_url, timeout=10, stream=True)
+            try:
+                if response.status_code == 200:
+                    logger.info("Successfully connected to Outlook ICS feed")
+                    return True
+                else:
+                    logger.error(f"ICS feed returned status {response.status_code}")
+                    return False
+            finally:
+                response.close()
         except requests.RequestException as e:
             logger.error(f"Failed to connect to ICS feed: {e}")
             return False
