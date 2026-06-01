@@ -45,7 +45,7 @@ AZURE_CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 # --- NEAR AI Settings (legacy) ---
 NEAR_AI_API_KEY = os.getenv("NEAR_AI_API_KEY")
 NEAR_AI_API_URL = os.getenv("NEAR_AI_API_URL", "https://cloud-api.near.ai/v1/chat/completions")
-NEAR_AI_MODEL = os.getenv("NEAR_AI_MODEL", "openai/gpt-oss-120b")
+NEAR_AI_MODEL = os.getenv("NEAR_AI_MODEL", "openai/gpt-5-nano")
 
 # =============================================================================
 # Sync Settings

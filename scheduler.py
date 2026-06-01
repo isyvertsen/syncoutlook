@@ -45,7 +45,7 @@ def run_sync():
 
 def main():
     print("Starting calendar sync scheduler...")
-    print("Schedule: Hourly between 07:00-14:00 on weekdays (Mon-Fri)")
+    print("Schedule: Every 30 min between 07:00-14:30 on weekdays (Mon-Fri)")
     print("Excluding Norwegian public holidays")
     print()
 
@@ -61,10 +61,13 @@ def main():
         ran_at=datetime.now().isoformat(),
     )
 
-    # Schedule hourly runs at minute 0 for hours 7-14
+    # Schedule runs every 30 minutes within the working-hours slot.
+    # is_working_hours() gates actual syncs to 07:00-15:00, so the last
+    # effective run is 14:30 (15:00 would be skipped).
     for hour in range(7, 15):
-        schedule.every().day.at(f"{hour:02d}:00").do(run_sync)
-        logger.info(f"Scheduled sync at {hour:02d}:00")
+        for minute in ("00", "30"):
+            schedule.every().day.at(f"{hour:02d}:{minute}").do(run_sync)
+            logger.info(f"Scheduled sync at {hour:02d}:{minute}")
 
     print()
     print("Scheduler running. Press Ctrl+C to stop.")
