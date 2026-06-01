@@ -71,27 +71,64 @@ class OutlookClient:
         start_date = now - timedelta(days=days_back)
         end_date = now + timedelta(days=days_ahead)
 
-        events = []
+        # Index components into masters (RRULE), per-occurrence overrides
+        # (RECURRENCE-ID) and plain single events. Outlook represents a
+        # cancelled/moved occurrence of a series via EXDATE on the master or a
+        # RECURRENCE-ID override VEVENT, so we must reconcile them rather than
+        # blindly expanding the RRULE.
+        masters = []
+        singles = []
+        overrides: dict[tuple[str, str], object] = {}
         for component in cal.walk():
             if component.name != "VEVENT":
                 continue
 
-            # Check if this is a recurring event
+            uid = str(component.get("uid", ""))
+            recurrence_id = component.get("recurrence-id")
             rrule_prop = component.get("rrule")
-            if rrule_prop:
-                # Expand recurring event into individual occurrences
-                expanded = self._expand_recurring_event(component, start_date, end_date)
-                events.extend(expanded)
+
+            if recurrence_id is not None:
+                overrides[(uid, self._date_key(recurrence_id.dt))] = component
+            elif rrule_prop is not None:
+                masters.append(component)
             else:
-                # Single event
-                event = self._parse_event(component)
-                if event and self._is_in_range(event, start_date, end_date):
-                    events.append(event)
+                singles.append(component)
+
+        events = []
+        consumed_overrides: set[tuple[str, str]] = set()
+
+        # Single events
+        for component in singles:
+            event = self._parse_event(component)
+            if event and self._is_in_range(event, start_date, end_date):
+                events.append(event)
+
+        # Recurring events, honouring EXDATE and RECURRENCE-ID overrides
+        for component in masters:
+            events.extend(
+                self._expand_recurring_event(
+                    component, start_date, end_date, overrides, consumed_overrides
+                )
+            )
+
+        # Orphan overrides whose master is not in the feed: emit standalone so
+        # they are still synced (and mapped to the original occurrence's id).
+        for (uid, date_key), component in overrides.items():
+            if (uid, date_key) in consumed_overrides:
+                continue
+            event = self._build_override_event(component, date_key)
+            if event and self._is_in_range(event, start_date, end_date):
+                events.append(event)
 
         # Sort by start time
         events.sort(key=lambda e: e["start"])
         logger.info(f"Found {len(events)} events in date range")
         return events
+
+    @staticmethod
+    def _date_key(value) -> str:
+        """Normalize a date/datetime to an ISO date string for keying."""
+        return (value.date() if hasattr(value, "date") else value).isoformat()
 
     def _parse_event(self, component) -> Optional[dict]:
         """Parse an ICS VEVENT component into our event format."""
@@ -199,15 +236,54 @@ class OutlookClient:
             logger.warning(f"Failed to parse event: {e}")
             return None
 
-    def _expand_recurring_event(self, component, start_date: datetime, end_date: datetime) -> list[dict]:
-        """Expand a recurring event into individual occurrences within the date range."""
+    def _build_override_event(self, component, original_date_key: str) -> Optional[dict]:
+        """Build an event from a RECURRENCE-ID override VEVENT.
+
+        Returns None if the override is cancelled. The id is keyed to the
+        *original* occurrence date so it maps to the same Google event the
+        master would have produced (moving an instance updates, not duplicates).
+        """
+        event = self._parse_event(component)  # returns None when STATUS:CANCELLED
+        if not event:
+            return None
+        unique_uid = f"{event['original_uid']}-{original_date_key}"
+        event["id"] = hashlib.sha256(unique_uid.encode()).hexdigest()[:32]
+        return event
+
+    def _expand_recurring_event(
+        self,
+        component,
+        start_date: datetime,
+        end_date: datetime,
+        overrides: Optional[dict] = None,
+        consumed_overrides: Optional[set] = None,
+    ) -> list[dict]:
+        """Expand a recurring event into individual occurrences within the date range.
+
+        Honours EXDATE (cancelled occurrences are skipped) and RECURRENCE-ID
+        overrides (a moved/modified occurrence replaces the generated one).
+        """
         events = []
+        overrides = overrides or {}
+        if consumed_overrides is None:
+            consumed_overrides = set()
 
         try:
             # Get the RRULE
             rrule_prop = component.get("rrule")
             if not rrule_prop:
                 return events
+
+            uid = str(component.get("uid", ""))
+
+            # Collect EXDATE-excluded dates (cancelled occurrences)
+            exdates: set = set()
+            exdate_prop = component.get("exdate")
+            if exdate_prop:
+                exdate_props = exdate_prop if isinstance(exdate_prop, list) else [exdate_prop]
+                for prop in exdate_props:
+                    for v in getattr(prop, "dts", []):
+                        exdates.add(self._date_key(v.dt))
 
             # Get event start time
             dtstart = component.get("dtstart")
@@ -264,6 +340,22 @@ class OutlookClient:
 
             # Create individual event instances
             for occurrence in occurrences:
+                occurrence_date_str = self._date_key(occurrence)
+
+                # Skip occurrences cancelled in Outlook (EXDATE)
+                if occurrence_date_str in exdates:
+                    continue
+
+                # If this occurrence was moved/modified, use the override
+                # VEVENT instead of the RRULE-generated instance.
+                override = overrides.get((uid, occurrence_date_str))
+                if override is not None:
+                    consumed_overrides.add((uid, occurrence_date_str))
+                    override_event = self._build_override_event(override, occurrence_date_str)
+                    if override_event:  # None when the override is cancelled
+                        events.append(override_event)
+                    continue
+
                 event = self._parse_event(component)
                 if event:
                     # Update start/end times for this occurrence
@@ -280,7 +372,6 @@ class OutlookClient:
                         event["end"] = occurrence_end.isoformat()
 
                     # Create unique ID for this occurrence (UID + date)
-                    occurrence_date_str = occurrence.date().isoformat()
                     unique_uid = f"{event['original_uid']}-{occurrence_date_str}"
                     event["id"] = hashlib.sha256(unique_uid.encode()).hexdigest()[:32]
 
