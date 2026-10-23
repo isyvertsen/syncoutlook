@@ -10,3 +10,10 @@ cmds = [
 
 [start]
 cmd = "bash -c 'chmod +x /app/docker-entrypoint.sh && /app/docker-entrypoint.sh'"
+
+
+# Sikkerhet: nixpacks-basen (ubuntu:24.04) har utdaterte OS-pakker, bl.a. sudo (CVE-2025-32463)
+# og git (CVE-2025-48384), begge på CISA KEV. Oppgrader alle Ubuntu-pakker ved hver bygging.
+[phases.os-security]
+dependsOn = ["setup"]
+cmds = ["apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade && rm -rf /var/lib/apt/lists/*"]
